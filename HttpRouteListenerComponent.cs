@@ -4,14 +4,19 @@ using System.Net.Http;
 using UnityEngine;
 using UnityEngine.Events;
 
-namespace HitViking.HttpServer
+namespace HttpListener
 {
     [Serializable]
     public sealed class HttpProcessUnityEvent : UnityEvent<HttpListenerRequest, HttpListenerResponse> { }
 
     public enum HttpMethodEnum
     {
-        GET, POST, OPTIONS, DELETE, HEAD, PUT
+        GET,
+        POST,
+        OPTIONS,
+        DELETE,
+        HEAD,
+        PUT
     }
 
     public static class HttpMethodEnumExtensions
@@ -42,7 +47,7 @@ namespace HitViking.HttpServer
 
         private void OnValidate()
         {
-            if (path == null || path.Length == 0)
+            if (string.IsNullOrEmpty(path))
             {
                 path = "/";
             }
@@ -65,7 +70,7 @@ namespace HitViking.HttpServer
 
         private void Awake()
         {
-            _routeHandler = new HttpServerComponent.RouteHandler(onProcess.Invoke, method.ToHttpMethod(), path);
+            _routeHandler = new(onProcess.Invoke, method.ToHttpMethod(), path);
             serverComponent.BindRoute(_routeHandler);
         }
 
@@ -76,7 +81,6 @@ namespace HitViking.HttpServer
 
                 serverComponent.UnbindRoute(_routeHandler);
             }
-
         }
     }
 }

@@ -2,9 +2,9 @@
 using System.Net;
 using UnityEngine;
 
-namespace HitViking.HttpServer.Test
+namespace HttpListener.Test
 {
-    public class HelloWorldPage : MonoBehaviour
+    public sealed class HelloWorldPage : MonoBehaviour
     {
         public void Handle(HttpListenerRequest request, HttpListenerResponse response)
         {

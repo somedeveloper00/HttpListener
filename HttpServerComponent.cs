@@ -6,10 +6,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
-namespace HitViking.HttpServer
+namespace HttpListener
 {
-
-    [AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = true)]
+    [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
     public sealed class HttpServerRoute : Attribute
     {
         public HttpMethod method;
@@ -98,10 +97,10 @@ namespace HitViking.HttpServer
 
         private void Listen()
         {
-            HttpListener listener = null; // initializing it outside so we can close it later on
+            System.Net.HttpListener listener = null; // initializing it outside so we can close it later on
             try
             {
-                listener = new HttpListener();
+                listener = new System.Net.HttpListener();
                 var url = new UriBuilder(Uri.UriSchemeHttp, host, port);
                 foreach (var routeHandler in _routeHandlers)
                 {
@@ -132,19 +131,6 @@ namespace HitViking.HttpServer
                 {
                     var context = listener.GetContext();
                     Debug.LogFormat($"[{DateTime.UtcNow:H:mm:ss:f}] request: {context.Request.HttpMethod} {context.Request.Url}");
-
-                    // // handle urls with trailing '/'
-                    // if (context.Request.Url.LocalPath.Length > 1 && context.Request.Url.LocalPath[^1] == '/') {
-                    //     var newUrl = context.Request.Url.LocalPath[0..^1];
-                    //     context.Response.RedirectLocation = newUrl;
-                    //     context.Response.AddHeader( HttpResponseHeader.Location.ToString(), newUrl );
-                    //     context.Response.StatusCode = (int)HttpStatusCode.Found;
-                    //     var buffer = Encoding.UTF8.GetBytes( $"Redirecting to: {newUrl}" ).AsSpan();
-                    //     context.Response.ContentLength64 = buffer.Length;
-                    //     context.Response.OutputStream.Write( buffer );
-                    //     context.Response.OutputStream.Close();
-                    //     continue;
-                    // }
 
                     RouteHandler routeHandler = null;
                     for (var i = 0; i < _routeHandlers.Count; i++)
@@ -189,11 +175,11 @@ namespace HitViking.HttpServer
             }
         }
 
-        public class RouteHandler
+        public sealed class RouteHandler
         {
-            public string path; // format: '/path'
-            public HttpMethod method;
-            public HandleRoute handle;
+            public readonly string path; // format: '/path'
+            public readonly HttpMethod method;
+            public readonly HandleRoute handle;
 
             public RouteHandler(HandleRoute handle, HttpMethod method, string path)
             {

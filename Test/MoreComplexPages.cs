@@ -2,9 +2,9 @@
 using System.Net;
 using UnityEngine;
 
-namespace HitViking.HttpServer.Test
+namespace HttpListener.Test
 {
-    public class MoreComplexPages : MonoBehaviour
+    public sealed class MoreComplexPages : MonoBehaviour
     {
         public void HandleLogin(HttpListenerRequest req, HttpListenerResponse res)
         {
@@ -18,7 +18,7 @@ namespace HitViking.HttpServer.Test
                 return;
             }
             var password = req.QueryString["pass"];
-            if (password == null || password != "123")
+            if (password is not "123")
             {
                 var buff = System.Text.Encoding.UTF8.GetBytes("invalid password").AsSpan();
                 res.ContentLength64 = buff.Length;

@@ -4,12 +4,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
-namespace HitViking.HttpServer
+namespace HttpListener
 {
-    public class SafeThreadingComponent : MonoBehaviour
+    public sealed class SafeThreadingComponent : MonoBehaviour
     {
         [SerializeField] private Phase phase;
-        private Queue<Action> _actions = new(8);
+        private readonly Queue<Action> _actions = new(8);
         private Thread _mainThread;
 
         private void Awake() => _mainThread = Thread.CurrentThread;
@@ -70,14 +70,12 @@ namespace HitViking.HttpServer
                     action();
                 }
             }
-
         }
 
         private void FixedUpdate()
         {
             if (phase == Phase.FixedUpdate)
             {
-
                 while (_actions.Count > 0)
                 {
                     var action = _actions.Dequeue();

@@ -2,12 +2,13 @@ using System.IO;
 using System.Net;
 using System.Text;
 
-public static class HttpRequestExtensions
+namespace HttpListener.Extensions
 {
-    public static string ReadText(this HttpListenerRequest req)
+    public static class HttpRequestExtensions
     {
-        using (var reader = new StreamReader(req.InputStream, Encoding.UTF8))
+        public static string ReadText(this HttpListenerRequest req)
         {
+            using var reader = new StreamReader(req.InputStream, Encoding.UTF8);
             return reader.ReadToEnd();
         }
     }
