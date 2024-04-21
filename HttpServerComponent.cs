@@ -2,36 +2,46 @@
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
 namespace HttpListener
 {
-    [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
-    public sealed class HttpServerRoute : Attribute
-    {
-        public HttpMethod method;
-        public string path;
-
-        public HttpServerRoute(HttpMethod method, string path)
-        {
-            this.method = method;
-            this.path = path;
-        }
-    }
-
     public delegate void HandleRoute(HttpListenerRequest req, HttpListenerResponse res);
 
     /// <summary>
     /// Represents an HTTP server component that listens for incoming requests and handles them using registered route handlers.
     /// </summary>
-    public sealed class HttpServerComponent : MonoBehaviour
+    public sealed class HttpListenerComponent : MonoBehaviour
     {
+        [Tooltip("Port for the server to listen to")]
         [SerializeField] private int port = 8080;
-        [SerializeField] private string host = "localhost";
-        [SerializeField] private SafeThreadingComponent safeThreading;
-        [SerializeField] private bool printPublicIpOnStart;
+
+        [Tooltip("host for the server to listen to. Usually 127.0.0.1")]
+        [SerializeField] private string host = "127.0.0.1";
+
+        [Tooltip("Determines on which Unity phase to handle requests")]
+        [SerializeField] private Phase phase;
+
+        [Header("Debug")]
+        [Tooltip("Whether to print public IP address when server starts")]
+        [SerializeField] private bool printPublicIpOnStart = true;
+
+        [Tooltip("Whether to print the route and HTTP method when a request comes")]
+        [SerializeField] private bool printReceivedRoutes = true;
+
+        [Tooltip("Whether to print when server starts listening")]
+        [SerializeField] private bool printStartedListening = true;
+
+        [Tooltip("Whether to print when server stops listening")]
+        [SerializeField] private bool printClosedListening = true;
+
+        /// <summary>
+        /// Actions to be executed in Unity's main thread
+        /// </summary>
+        private readonly Queue<HttpAction> _httpAction = new(8);
 
         /// <summary>
         /// background server thread
@@ -45,6 +55,9 @@ namespace HttpListener
 
         private void Start() => StartServer();
         private void OnDestroy() => StopServer();
+        private void Update() => HandlePhase(Phase.Update);
+        private void LateUpdate() => HandlePhase(Phase.LateUpdate);
+        private void FixedUpdate() => HandlePhase(Phase.FixedUpdate);
 
         public bool IsRunning() => _serverThread != null && _serverThread.IsAlive;
 
@@ -100,7 +113,7 @@ namespace HttpListener
             System.Net.HttpListener listener = null; // initializing it outside so we can close it later on
             try
             {
-                listener = new System.Net.HttpListener();
+                listener = new();
                 var url = new UriBuilder(Uri.UriSchemeHttp, host, port);
                 foreach (var routeHandler in _routeHandlers)
                 {
@@ -109,7 +122,11 @@ namespace HttpListener
                 }
 
                 listener.Start();
-                Debug.Log($"server listening on: {string.Join(", ", listener.Prefixes)}");
+                if (printStartedListening)
+                {
+                    Debug.Log($"server listening on: {string.Join(", ", listener.Prefixes)}");
+                }
+
                 if (printPublicIpOnStart)
                 {
                     Task.Run(() =>
@@ -130,9 +147,12 @@ namespace HttpListener
                 while (true)
                 {
                     var context = listener.GetContext();
-                    Debug.LogFormat($"[{DateTime.UtcNow:H:mm:ss:f}] request: {context.Request.HttpMethod} {context.Request.Url}");
+                    if (printReceivedRoutes)
+                    {
+                        Debug.LogFormat($"[{DateTime.UtcNow:H:mm:ss:f}] request: {context.Request.HttpMethod} {context.Request.Url}");
+                    }
 
-                    RouteHandler routeHandler = null;
+                    RouteHandler? routeHandler = null;
                     for (var i = 0; i < _routeHandlers.Count; i++)
                     {
                         if (_routeHandlers[i].path == context.Request.Url.LocalPath &&
@@ -143,15 +163,15 @@ namespace HttpListener
                         }
                     }
 
-                    if (routeHandler == null)
+                    if (!routeHandler.HasValue)
                     {
                         context.Response.StatusCode = (int)HttpStatusCode.NotFound;
                         context.Response.Close();
                         continue;
                     }
 
-                    // execute in main thread
-                    safeThreading.ExecuteInMainThread(() => routeHandler.handle(context.Request, context.Response));
+                    // enque for later handling
+                    _httpAction.Enqueue(new(routeHandler.Value, context));
                 }
             }
             catch (ThreadAbortException)
@@ -165,17 +185,61 @@ namespace HttpListener
             }
             finally
             {
-                if (listener == null || !listener.IsListening)
-                    Debug.Log($"Server closed successfully.");
-                else
+                if (printClosedListening)
                 {
-                    Debug.LogError($"Server failed to close. aborting it now");
-                    listener.Abort();
+                    if (listener == null || !listener.IsListening)
+                    {
+                        Debug.Log($"Server at port {port} closed successfully.");
+                    }
+                    else
+                    {
+                        Debug.LogError($"Server at port {port} failed to close. aborting it now");
+                        listener.Abort();
+                    }
                 }
             }
         }
 
-        public sealed class RouteHandler
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void HandlePhase(Phase phase)
+        {
+            if (this.phase == phase)
+            {
+                while (_httpAction.TryDequeue(out var action))
+                {
+                    try
+                    {
+                        action.routeHandler.handle?.Invoke(action.context.Request, action.context.Response);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogException(ex);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Unity execution phase
+        /// </summary>
+        public enum Phase
+        {
+            Update, LateUpdate, FixedUpdate
+        }
+
+        public readonly struct HttpAction
+        {
+            public readonly RouteHandler routeHandler;
+            public readonly HttpListenerContext context;
+
+            public HttpAction(RouteHandler routeHandler, HttpListenerContext context)
+            {
+                this.routeHandler = routeHandler;
+                this.context = context;
+            }
+        }
+
+        public readonly struct RouteHandler
         {
             public readonly string path; // format: '/path'
             public readonly HttpMethod method;

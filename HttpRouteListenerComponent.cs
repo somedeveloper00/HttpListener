@@ -11,12 +11,7 @@ namespace HttpListener
 
     public enum HttpMethodEnum
     {
-        GET,
-        POST,
-        OPTIONS,
-        DELETE,
-        HEAD,
-        PUT
+        GET, POST, OPTIONS, DELETE, HEAD, PUT
     }
 
     public static class HttpMethodEnumExtensions
@@ -36,18 +31,17 @@ namespace HttpListener
         }
     }
 
-
     public sealed class HttpRouteListenerComponent : MonoBehaviour
     {
-        [SerializeField] private HttpServerComponent serverComponent;
-        [SerializeField] private string path = "/";
-        [SerializeField] private HttpMethodEnum method;
-        [SerializeField] private HttpProcessUnityEvent onProcess;
-        private HttpServerComponent.RouteHandler _routeHandler;
+        public HttpListenerComponent serverComponent;
+        public string path = "/";
+        public HttpMethodEnum method;
+        public HttpProcessUnityEvent onProcess;
+        private HttpListenerComponent.RouteHandler _routeHandler;
 
         private void OnValidate()
         {
-            if (string.IsNullOrEmpty(path))
+            if (path == null || path.Length == 0)
             {
                 path = "/";
             }
@@ -78,7 +72,6 @@ namespace HttpListener
         {
             if (serverComponent && !serverComponent.IsRunning())
             {
-
                 serverComponent.UnbindRoute(_routeHandler);
             }
         }

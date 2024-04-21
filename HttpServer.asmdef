@@ -1,6 +1,6 @@
 {
-    "name": "HttpServer",
-    "rootNamespace": "",
+    "name": "HttpListener",
+    "rootNamespace": "HttpListener",
     "references": [],
     "includePlatforms": [],
     "excludePlatforms": [],

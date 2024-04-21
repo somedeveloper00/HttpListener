@@ -2,6 +2,7 @@ using System.IO;
 using System.Net;
 using System.Net.Mime;
 using System.Text;
+using UnityEngine;
 
 namespace HttpListener.Extensions
 {
@@ -17,14 +18,16 @@ namespace HttpListener.Extensions
             res.Close();
         }
 
-        public static void WriteJson(this HttpListenerResponse res, string text)
+        public static string WriteJson<T>(this HttpListenerResponse res, T data)
         {
-            var bytes = Encoding.UTF8.GetBytes(text);
+            var json = JsonUtility.ToJson(data);
+            var bytes = Encoding.UTF8.GetBytes(json);
             res.StatusCode = (int)HttpStatusCode.OK;
             res.ContentLength64 = bytes.Length;
             res.ContentType = MediaTypeNames.Application.Json;
             res.OutputStream.Write(bytes);
             res.Close();
+            return json;
         }
 
         public static void Ok(this HttpListenerResponse res)
