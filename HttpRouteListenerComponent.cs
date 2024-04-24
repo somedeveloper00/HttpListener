@@ -93,31 +93,39 @@ namespace HttpListener
 
         private void Awake()
         {
-            _routeHandler = new HttpListenerComponent.RouteHandler(onProcess.Invoke, method.ToHttpMethod(), path);
-            _corsRouteHandler = new HttpListenerComponent.RouteHandler(OnCors, HttpMethod.Options, path);
+            _routeHandler = new HttpListenerComponent.RouteHandler(OnMethod, method.ToHttpMethod(), path);
             serverComponent.BindRoute(_routeHandler);
-            serverComponent.BindRoute(_corsRouteHandler);
+
+            if (method != HttpMethodEnum.OPTIONS)
+            {
+                _corsRouteHandler = new HttpListenerComponent.RouteHandler(OnCors, HttpMethod.Options, path);
+                serverComponent.BindRoute(_corsRouteHandler);
+            }
+        }
+
+        private void OnMethod(HttpListenerRequest req, HttpListenerResponse res)
+        {
+            AddCorsHeaders(res);
+            onProcess.Invoke(req, res);
         }
 
         private void OnCors(HttpListenerRequest req, HttpListenerResponse res)
+        {
+            AddCorsHeaders(res);
+            corsOptions.onProcess?.Invoke(req, res);
+
+            if (res.OutputStream.CanWrite)
+            {
+                res.OutputStream.Close();
+            }
+        }
+
+        private void AddCorsHeaders(HttpListenerResponse res)
         {
             res.AddHeader("Access-Control-Allow-Origin", string.Join(',', corsOptions.allowedOrigins));
             res.AddHeader("Access-Control-Allow-Methods", string.Join(',', corsOptions.allowedMethods));
             res.AddHeader("Access-Control-Allow-Credentials", corsOptions.allowCredentials.ToString());
             res.AddHeader("Access-Control-Allow-Headers", string.Join(',', corsOptions.allowedHeaders));
-            try
-            {
-                corsOptions.onProcess?.Invoke(req, res);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogException(ex);
-            }
-            
-            if (res.OutputStream.CanWrite)
-            {
-                res.OutputStream.Close();
-            }
         }
 
         private void OnDestroy()
