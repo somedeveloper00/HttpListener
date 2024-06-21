@@ -32,6 +32,9 @@ namespace HttpListener
         [Tooltip("Whether to print the route and HTTP method when a request comes")]
         [SerializeField] private bool printReceivedRoutes = true;
 
+        [Tooltip("Whether to print information about response")]
+        [SerializeField] private bool printResponseInfo = false;
+
         [Tooltip("Whether to print when server starts listening")]
         [SerializeField] private bool printStartedListening = true;
 
@@ -65,7 +68,6 @@ namespace HttpListener
         {
             if (!IsRunning())
             {
-                Debug.LogWarning($"server is not running.");
                 return;
             }
             _serverThread.Abort();
@@ -81,10 +83,9 @@ namespace HttpListener
 
             _serverThread = new Thread(Listen)
             {
-                IsBackground = true
+                Name = "http server",
             };
             _serverThread.Start();
-
         }
 
         public void BindRoute(RouteHandler handler)
@@ -149,14 +150,18 @@ namespace HttpListener
                     var context = listener.GetContext();
                     if (printReceivedRoutes)
                     {
-                        Debug.LogFormat($"[{DateTime.UtcNow:H:mm:ss:f}] request: {context.Request.HttpMethod} {context.Request.Url}");
+                        Debug.LogFormat($"[{DateTime.UtcNow:H:mm:ss:f}] request: {context.Request.HttpMethod} {context.Request.Url}\nHeaders\n{context.Request.Headers}");
                     }
 
                     RouteHandler? routeHandler = null;
                     for (var i = 0; i < _routeHandlers.Count; i++)
                     {
-                        if (_routeHandlers[i].path == context.Request.Url.LocalPath &&
-                            _routeHandlers[i].method.Method == context.Request.HttpMethod)
+                        string requestRoute = context.Request.Url.LocalPath;
+
+                        if (_routeHandlers[i].method.Method == context.Request.HttpMethod &&
+                            (_routeHandlers[i].listenToSubRoutes
+                                ? requestRoute.StartsWith(_routeHandlers[i].path, StringComparison.CurrentCultureIgnoreCase)
+                                : requestRoute.Equals(_routeHandlers[i].path, StringComparison.CurrentCultureIgnoreCase)))
                         {
                             routeHandler = _routeHandlers[i];
                             break;
@@ -171,16 +176,33 @@ namespace HttpListener
                     }
 
                     // enque for later handling
-                    _httpAction.Enqueue(new(routeHandler.Value, context));
+                    lock (_httpAction)
+                    {
+                        _httpAction.Enqueue(new(routeHandler.Value, context));
+                    }
                 }
             }
             catch (ThreadAbortException)
             {
-                listener?.Stop();
+                try
+                {
+                    listener?.Stop();
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogException(ex);
+                }
             }
             catch (Exception e)
             {
-                listener?.Stop();
+                try
+                {
+                    listener?.Stop();
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogException(ex);
+                }
                 Debug.LogException(e);
             }
             finally
@@ -205,15 +227,22 @@ namespace HttpListener
         {
             if (this.phase == phase)
             {
-                while (_httpAction.TryDequeue(out var action))
+                lock (_httpAction)
                 {
-                    try
+                    while (_httpAction.TryDequeue(out var action))
                     {
-                        action.routeHandler.handle?.Invoke(action.context.Request, action.context.Response);
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.LogException(ex);
+                        try
+                        {
+                            action.routeHandler.handle?.Invoke(action.context.Request, action.context.Response);
+                            if (printResponseInfo)
+                            {
+                                Debug.Log($"[{DateTime.UtcNow:H:mm:ss:f}] response: {action.context.Request.HttpMethod} {action.context.Request.RawUrl} status code {action.context.Response.StatusCode}\nHeaders\n{action.context.Response.Headers}");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogException(ex);
+                        }
                     }
                 }
             }
@@ -242,14 +271,16 @@ namespace HttpListener
         public readonly struct RouteHandler
         {
             public readonly string path; // format: '/path'
+            public readonly bool listenToSubRoutes;
             public readonly HttpMethod method;
             public readonly HandleRoute handle;
 
-            public RouteHandler(HandleRoute handle, HttpMethod method, string path)
+            public RouteHandler(HandleRoute handle, HttpMethod method, string path, bool listenToSubRoutes)
             {
                 this.handle = handle;
                 this.method = method;
                 this.path = path;
+                this.listenToSubRoutes = listenToSubRoutes;
             }
         }
     }
