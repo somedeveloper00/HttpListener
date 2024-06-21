@@ -111,10 +111,9 @@ namespace HttpListener
 
         private void Listen()
         {
-            System.Net.HttpListener listener = null; // initializing it outside so we can close it later on
+            using System.Net.HttpListener listener = new(); // initializing it outside so we can close it later on
             try
             {
-                listener = new();
                 var url = new UriBuilder(Uri.UriSchemeHttp, host, port);
                 foreach (var routeHandler in _routeHandlers)
                 {
@@ -182,31 +181,10 @@ namespace HttpListener
                     }
                 }
             }
-            catch (ThreadAbortException)
-            {
-                try
-                {
-                    listener?.Stop();
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogException(ex);
-                }
-            }
-            catch (Exception e)
-            {
-                try
-                {
-                    listener?.Stop();
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogException(ex);
-                }
-                Debug.LogException(e);
-            }
             finally
             {
+                if (listener?.IsListening == true)
+                    listener?.Close();
                 if (printClosedListening)
                 {
                     if (listener == null || !listener.IsListening)
